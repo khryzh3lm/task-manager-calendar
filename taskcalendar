@@ -1,0 +1,393 @@
+import 'package:flutter/material.dart';
+import 'package:table_calendar/table_calendar.dart';
+
+void main() {
+  runApp(TaskManagerApp());
+}
+
+class TaskManagerApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Pink Task Manager',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.pink,
+        scaffoldBackgroundColor: Colors.pink[50],
+      ),
+      home: HomePage(),
+    );
+  }
+}
+
+/* ---------------- HOME PAGE ---------------- */
+
+class HomePage extends StatefulWidget {
+  @override
+  _HomePageState createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final List<String> months = const [
+    'January', 'February', 'March', 'April',
+    'May', 'June', 'July', 'August',
+    'September', 'October', 'November', 'December'
+  ];
+
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
+  void _showSearchDialog() {
+    _searchController.text = _searchQuery;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Search Tasks'),
+        content: TextField(
+          controller: _searchController,
+          decoration: const InputDecoration(hintText: 'Enter task keyword'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _searchQuery = _searchController.text;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Search'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _searchQuery = '';
+                _searchController.clear();
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Task Manager'),
+        backgroundColor: Colors.pink,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: _showSearchDialog,
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(10),
+        child: GridView.builder(
+          itemCount: 12,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 0.9,
+          ),
+          itemBuilder: (context, index) {
+            final month = index + 1;
+            final daysInMonth =
+                DateTime(DateTime.now().year, month + 1, 0).day;
+
+            return GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CalendarPage(month: month),
+                  ),
+                );
+              },
+              child: Card(
+                color: Colors.pink[100],
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    // Month label
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.pink,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12),
+                        ),
+                      ),
+                    child: Text(
+                      months[index],
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10, // increased for readability
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  // Mini calendar without boxes
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: GridView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 7,
+                            mainAxisSpacing: 2,
+                            crossAxisSpacing: 2,
+                          ),
+                          itemCount: daysInMonth,
+                          itemBuilder: (context, dayIndex) {
+                            final dayNumber = dayIndex + 1;
+                            final isToday = dayNumber == DateTime.now().day &&
+                                month == DateTime.now().month;
+
+                            return Center(
+                              child: Text(
+                                '$dayNumber',
+                                style: TextStyle(
+                                  fontSize: 8, // increased from 
+                                  fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                                  color: isToday ? Colors.pink : Colors.pink[900],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+
+
+/* ---------------- FULL CALENDAR PAGE ---------------- */
+
+class CalendarPage extends StatefulWidget {
+  final int month;
+  const CalendarPage({required this.month});
+
+  @override
+  State<CalendarPage> createState() => _CalendarPageState();
+}
+
+class _CalendarPageState extends State<CalendarPage> {
+  DateTime selectedDay = DateTime.now();
+  late DateTime focusedDay;
+
+  final Map<DateTime, List<Map<String, dynamic>>> tasks = {};
+  
+
+  DateTime normalize(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  @override
+  void initState() {
+    super.initState();
+    focusedDay = DateTime(DateTime.now().year, widget.month, 1);
+    selectedDay = focusedDay;
+  }
+
+  /// 📌 Show the modal bottom sheet for tasks of a specific day
+  void _showTaskManagerForDay(DateTime day) {
+    final dayKey = normalize(day);
+    final TextEditingController modalController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, // allows sheet to take full height
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: StatefulBuilder(
+              builder: (context, setModalState) {
+                final dayTasks = tasks[dayKey] ?? [];
+
+                void _addTask(String task, {bool urgent = false}) {
+  if (task.trim().isEmpty) return;
+  final key = normalize(selectedDay);
+
+  setState(() {
+    tasks.putIfAbsent(key, () => []);
+    tasks[key]!.add({'title': task.trim(), 'urgent': urgent});
+  });
+
+  modalController.clear();
+}
+
+
+                void deleteTask(Map<String, dynamic> task) {
+                  setState(() {
+                    tasks[dayKey]?.remove(task);
+                    if (tasks[dayKey]?.isEmpty ?? false) {
+                      tasks.remove(dayKey);
+                    }
+                  });
+                  setModalState(() {});
+                }
+
+                return Column(
+                  children: [
+                    Container(
+                      height: 6,
+                      width: 50,
+                      margin: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.pink[200],
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: TextField(
+                        controller: modalController,
+                        textInputAction: TextInputAction.done,
+                        decoration: InputDecoration(
+                          hintText: 'Add task for ${day.day}/${day.month}',
+                          hintStyle: const TextStyle(fontSize: 14),
+                          prefixIcon: const Icon(Icons.add, color: Colors.pink),
+                          filled: true,
+                          fillColor: Colors.pink[50],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        onSubmitted: _addTask,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: dayTasks.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'No tasks for this day',
+                                style: TextStyle(color: Colors.pink),
+                              ),
+                            )
+                          : ListView.builder(
+                              itemCount: dayTasks.length,
+                              itemBuilder: (context, index) {
+                                final task = dayTasks[index];
+                                return Card(
+                                  color: Colors.pink[100],
+                                  margin: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  child: ListTile(
+                                    title: Text(
+                                      task['title'],
+                                      style: TextStyle(
+                                          color: Colors.pink.shade900,
+                                          fontSize: 14),
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.delete,
+                                          color: Colors.pink, size: 22),
+                                      onPressed: () => deleteTask(task),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Task Manager'),
+        backgroundColor: Colors.pink,
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            /// 📅 TableCalendar
+            TableCalendar(
+  firstDay: DateTime.utc(2020, 1, 1),
+  lastDay: DateTime.utc(2030, 12, 31),
+  focusedDay: focusedDay,
+  selectedDayPredicate: (day) => isSameDay(day, selectedDay),
+  onDaySelected: (selected, focused) {
+    setState(() {
+      selectedDay = selected;
+      focusedDay = focused;
+    });
+    _showTaskManagerForDay(selectedDay);
+  },
+  calendarStyle: CalendarStyle(
+    todayDecoration: BoxDecoration(
+      color: Colors.pink[200],
+      shape: BoxShape.circle,
+    ),
+    selectedDecoration: BoxDecoration(
+      color: Colors.pink,
+      shape: BoxShape.circle,
+    ),
+  ),
+  calendarBuilders: CalendarBuilders(
+    defaultBuilder: (context, day, _) {
+      final key = normalize(day);
+      if (tasks.containsKey(key) && tasks[key]!.isNotEmpty) {
+        // If any task is urgent -> red, else yellow
+        final isUrgent =
+            tasks[key]!.any((t) => t['urgent'] == true);
+        return Center(
+          child: Container(
+            decoration: BoxDecoration(
+              color: isUrgent ? Colors.red : Colors.yellow,
+              shape: BoxShape.circle,
+            ),
+            padding: const EdgeInsets.all(6),
+            child: Text(
+              '${day.day}',
+              style: TextStyle(
+                  color: Colors.black, fontWeight: FontWeight.bold),
+            ),
+          ),
+        );
+      }
+      return null; // default rendering
+    },
+  ),
+),
+          ],
+        ),
+      ),
+    );
+  }
+}
