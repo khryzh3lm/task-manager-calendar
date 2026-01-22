@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'dart:math';
 
 void main() {
   runApp(TaskManagerApp());
 }
 
 class TaskManagerApp extends StatelessWidget {
+  const TaskManagerApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -20,40 +23,165 @@ class TaskManagerApp extends StatelessWidget {
   }
 }
 
-/* ---------------- HOME PAGE ---------------- */
+/* ---------------- FLOWER PAINTER ---------------- */
+class FlowerPainter extends CustomPainter {
+  final Color color;
+  FlowerPainter({required this.color});
 
-class HomePage extends StatefulWidget {
   @override
-  _HomePageState createState() => _HomePageState();
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    for (int i = 0; i < 6; i++) {
+      final angle = i * 2 * pi / 6;
+      final dx = center.dx + radius * 0.6 * cos(angle);
+      final dy = center.dy + radius * 0.6 * sin(angle);
+      canvas.drawCircle(Offset(dx, dy), radius * 0.3, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/* ---------------- HOME PAGE ---------------- */
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
   final List<String> months = const [
-    'January', 'February', 'March', 'April',
-    'May', 'June', 'July', 'August',
-    'September', 'October', 'November', 'December'
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December'
   ];
 
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  final Map<DateTime, List<Map<String, dynamic>>> tasks = {};
+
+  DateTime normalize(DateTime d) => DateTime(d.year, d.month, d.day);
 
   void _showSearchDialog() {
     _searchController.text = _searchQuery;
+
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Search Tasks'),
-        content: TextField(
-          controller: _searchController,
-          decoration: const InputDecoration(hintText: 'Enter task keyword'),
+        backgroundColor: Colors.pink[50],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Center(
+          child: Text(
+            'Search Tasks 🌸',
+            style: TextStyle(color: Colors.pink, fontWeight: FontWeight.bold),
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Enter task keyword...',
+                prefixIcon: const Icon(Icons.search, color: Colors.pink),
+                filled: true,
+                fillColor: Colors.pink[100],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () {
               setState(() {
-                _searchQuery = _searchController.text;
+                _searchQuery = _searchController.text.trim();
               });
               Navigator.pop(context);
+
+              if (_searchQuery.isNotEmpty) {
+                List<Map<String, dynamic>> results = [];
+                tasks.forEach((date, dayTasks) {
+                  for (var t in dayTasks) {
+                    if (t['title'].toString().toLowerCase().contains(_searchQuery.toLowerCase())) {
+                      results.add({'title': t['title'], 'date': date});
+                    }
+                  }
+                });
+
+                if (results.isNotEmpty) {
+                  showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      backgroundColor: Colors.pink[50],
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      title: const Center(
+                        child: Text(
+                          'Results 🌸',
+                          style: TextStyle(color: Colors.pink, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      content: SizedBox(
+                        width: double.maxFinite,
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: results.length,
+                          itemBuilder: (context, index) {
+                            final item = results[index];
+                            final DateTime date = item['date'];
+                            return Card(
+                              color: Colors.pink[100],
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              child: ListTile(
+                                title: Text(
+                                  item['title'],
+                                  style: TextStyle(
+                                    color: Colors.pink[900],
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  '${date.day}/${date.month}/${date.year}',
+                                  style: const TextStyle(color: Colors.pink),
+                                ),
+                                onTap: () {
+                                  Navigator.pop(context); // close results
+                                  _openCalendarPage(date.month, highlightDay: date);
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('No tasks found matching "$_searchQuery"'),
+                    ),
+                  );
+                }
+              }
             },
             child: const Text('Search'),
           ),
@@ -72,12 +200,37 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _openCalendarPage(int month, {DateTime? highlightDay}) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CalendarPage(
+          month: month,
+          tasks: tasks,
+          initialHighlightDay: highlightDay,
+          searchQuery: _searchQuery,
+        ),
+      ),
+    );
+    setState(() {}); // refresh in case tasks were updated
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Task Manager'),
+        title: const Text(
+          'Task Calendar 🌸',
+          style: TextStyle(
+            fontFamily: 'Jonathan',
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            letterSpacing: 1.2,
+          ),
+        ),
         backgroundColor: Colors.pink,
+        centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
@@ -97,18 +250,10 @@ class _HomePageState extends State<HomePage> {
           ),
           itemBuilder: (context, index) {
             final month = index + 1;
-            final daysInMonth =
-                DateTime(DateTime.now().year, month + 1, 0).day;
+            final daysInMonth = DateTime(DateTime.now().year, month + 1, 0).day;
 
             return GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CalendarPage(month: month),
-                  ),
-                );
-              },
+              onTap: () => _openCalendarPage(month),
               child: Card(
                 color: Colors.pink[100],
                 shape: RoundedRectangleBorder(
@@ -116,34 +261,29 @@ class _HomePageState extends State<HomePage> {
                 ),
                 child: Column(
                   children: [
-                    // Month label
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: Colors.pink,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(12),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                      ),
+                      child: Text(
+                        months[index],
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    child: Text(
-                      months[index],
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10, // increased for readability
-                        fontWeight: FontWeight.bold,
-                      ),
                     ),
-                  ),
-                  // Mini calendar without boxes
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.all(4.0),
                         child: GridView.builder(
                           physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 7,
                             mainAxisSpacing: 2,
                             crossAxisSpacing: 2,
@@ -153,14 +293,32 @@ class _HomePageState extends State<HomePage> {
                             final dayNumber = dayIndex + 1;
                             final isToday = dayNumber == DateTime.now().day &&
                                 month == DateTime.now().month;
+                            final dayKey =
+                                normalize(DateTime(DateTime.now().year, month, dayNumber));
 
-                            return Center(
-                              child: Text(
-                                '$dayNumber',
-                                style: TextStyle(
-                                  fontSize: 8, // increased from 
-                                  fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                                  color: isToday ? Colors.pink : Colors.pink[900],
+                            // Flower highlights for days with tasks
+                            final isHighlighted =
+                                tasks.containsKey(dayKey) && tasks[dayKey]!.isNotEmpty;
+
+                            return GestureDetector(
+                              onTap: () => _openCalendarPage(month, highlightDay: dayKey),
+                              child: Center(
+                                child: CustomPaint(
+                                  painter: isHighlighted
+                                      ? FlowerPainter(color: Colors.red)
+                                      : null,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(2),
+                                    child: Text(
+                                      '$dayNumber',
+                                      style: TextStyle(
+                                        fontSize: 8,
+                                        fontWeight:
+                                            isToday ? FontWeight.bold : FontWeight.normal,
+                                        color: Colors.pink[900],
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             );
@@ -179,24 +337,28 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-
-
 /* ---------------- FULL CALENDAR PAGE ---------------- */
-
 class CalendarPage extends StatefulWidget {
   final int month;
-  const CalendarPage({required this.month});
+  final Map<DateTime, List<Map<String, dynamic>>> tasks;
+  final DateTime? initialHighlightDay;
+  final String searchQuery;
+
+  const CalendarPage({
+    super.key,
+    required this.month,
+    required this.tasks,
+    this.initialHighlightDay,
+    this.searchQuery = '',
+  });
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
 }
 
 class _CalendarPageState extends State<CalendarPage> {
-  DateTime selectedDay = DateTime.now();
+  late DateTime selectedDay;
   late DateTime focusedDay;
-
-  final Map<DateTime, List<Map<String, dynamic>>> tasks = {};
-  
 
   DateTime normalize(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -204,49 +366,45 @@ class _CalendarPageState extends State<CalendarPage> {
   void initState() {
     super.initState();
     focusedDay = DateTime(DateTime.now().year, widget.month, 1);
-    selectedDay = focusedDay;
+    selectedDay = widget.initialHighlightDay ?? focusedDay;
   }
 
-  /// 📌 Show the modal bottom sheet for tasks of a specific day
   void _showTaskManagerForDay(DateTime day) {
     final dayKey = normalize(day);
     final TextEditingController modalController = TextEditingController();
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // allows sheet to take full height
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
         return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
           child: SizedBox(
             height: MediaQuery.of(context).size.height * 0.6,
             child: StatefulBuilder(
               builder: (context, setModalState) {
-                final dayTasks = tasks[dayKey] ?? [];
+                final dayTasks = widget.tasks[dayKey] ?? [];
 
-                void _addTask(String task, {bool urgent = false}) {
-  if (task.trim().isEmpty) return;
-  final key = normalize(selectedDay);
-
-  setState(() {
-    tasks.putIfAbsent(key, () => []);
-    tasks[key]!.add({'title': task.trim(), 'urgent': urgent});
-  });
-
-  modalController.clear();
-}
-
+                void addTask(String task, {bool urgent = false}) {
+                  if (task.trim().isEmpty) return;
+                  final key = normalize(day);
+                  setState(() {
+                    widget.tasks.putIfAbsent(key, () => []);
+                    widget.tasks[key]!.add({'title': task.trim(), 'urgent': urgent});
+                  });
+                  setModalState(() {});
+                  modalController.clear();
+                }
 
                 void deleteTask(Map<String, dynamic> task) {
+                  final key = normalize(day);
                   setState(() {
-                    tasks[dayKey]?.remove(task);
-                    if (tasks[dayKey]?.isEmpty ?? false) {
-                      tasks.remove(dayKey);
+                    widget.tasks[key]?.remove(task);
+                    if (widget.tasks[key]?.isEmpty ?? false) {
+                      widget.tasks.remove(key);
                     }
                   });
                   setModalState(() {});
@@ -279,7 +437,7 @@ class _CalendarPageState extends State<CalendarPage> {
                             borderSide: BorderSide.none,
                           ),
                         ),
-                        onSubmitted: _addTask,
+                        onSubmitted: addTask,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -297,18 +455,14 @@ class _CalendarPageState extends State<CalendarPage> {
                                 final task = dayTasks[index];
                                 return Card(
                                   color: Colors.pink[100],
-                                  margin: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
+                                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                   child: ListTile(
                                     title: Text(
                                       task['title'],
-                                      style: TextStyle(
-                                          color: Colors.pink.shade900,
-                                          fontSize: 14),
+                                      style: TextStyle(color: Colors.pink.shade900, fontSize: 14),
                                     ),
                                     trailing: IconButton(
-                                      icon: const Icon(Icons.delete,
-                                          color: Colors.pink, size: 22),
+                                      icon: const Icon(Icons.delete, color: Colors.pink, size: 22),
                                       onPressed: () => deleteTask(task),
                                     ),
                                   ),
@@ -330,62 +484,64 @@ class _CalendarPageState extends State<CalendarPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Task Manager'),
-        backgroundColor: Colors.pink,
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            /// 📅 TableCalendar
-            TableCalendar(
-  firstDay: DateTime.utc(2020, 1, 1),
-  lastDay: DateTime.utc(2030, 12, 31),
-  focusedDay: focusedDay,
-  selectedDayPredicate: (day) => isSameDay(day, selectedDay),
-  onDaySelected: (selected, focused) {
-    setState(() {
-      selectedDay = selected;
-      focusedDay = focused;
-    });
-    _showTaskManagerForDay(selectedDay);
-  },
-  calendarStyle: CalendarStyle(
-    todayDecoration: BoxDecoration(
-      color: Colors.pink[200],
-      shape: BoxShape.circle,
-    ),
-    selectedDecoration: BoxDecoration(
-      color: Colors.pink,
-      shape: BoxShape.circle,
-    ),
-  ),
-  calendarBuilders: CalendarBuilders(
-    defaultBuilder: (context, day, _) {
-      final key = normalize(day);
-      if (tasks.containsKey(key) && tasks[key]!.isNotEmpty) {
-        // If any task is urgent -> red, else yellow
-        final isUrgent =
-            tasks[key]!.any((t) => t['urgent'] == true);
-        return Center(
-          child: Container(
-            decoration: BoxDecoration(
-              color: isUrgent ? Colors.red : Colors.yellow,
-              shape: BoxShape.circle,
-            ),
-            padding: const EdgeInsets.all(6),
-            child: Text(
-              '${day.day}',
-              style: TextStyle(
-                  color: Colors.black, fontWeight: FontWeight.bold),
-            ),
+        title: const Text(
+          'Task Calendar 🌸',
+          style: TextStyle(
+            fontFamily: 'Jonathan',
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            letterSpacing: 1.2,
           ),
-        );
-      }
-      return null; // default rendering
-    },
-  ),
-),
-          ],
+        ),
+        backgroundColor: Colors.pink,
+        centerTitle: true,
+      ),
+      body: TableCalendar(
+        firstDay: DateTime.utc(2020, 1, 1),
+        lastDay: DateTime.utc(2030, 12, 31),
+        focusedDay: focusedDay,
+        selectedDayPredicate: (day) => isSameDay(day, selectedDay),
+        onDaySelected: (selected, focused) {
+          setState(() {
+            selectedDay = selected;
+            focusedDay = focused;
+          });
+          _showTaskManagerForDay(selected);
+        },
+        calendarFormat: CalendarFormat.month,
+        availableCalendarFormats: const {CalendarFormat.month: 'Month'},
+        headerStyle: const HeaderStyle(
+          formatButtonVisible: false,
+          titleCentered: true,
+        ),
+        calendarStyle: const CalendarStyle(
+          todayDecoration: BoxDecoration(
+            color: Colors.pinkAccent,
+            shape: BoxShape.circle,
+          ),
+        ),
+        calendarBuilders: CalendarBuilders(
+          defaultBuilder: (context, day, focusedDay) {
+            final key = normalize(day);
+            final hasTask = widget.tasks.containsKey(key) && widget.tasks[key]!.isNotEmpty;
+            return Center(
+              child: CustomPaint(
+                painter: hasTask ? FlowerPainter(color: Colors.red) : null,
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Text(
+                    '${day.day}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: isSameDay(day, DateTime.now()) ? FontWeight.bold : FontWeight.normal,
+                      color: Colors.pink[900],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
